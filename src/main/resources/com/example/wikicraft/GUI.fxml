@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.layout.AnchorPane?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.web.HTMLEditor?>
+
+<AnchorPane fx:id="rootPane" xmlns:fx="http://javafx.com/fxml"
+            fx:controller="com.example.wikicraft.Controller">
+
+    <!-- Main content -->
+    <VBox fx:id="rootVBox" AnchorPane.topAnchor="0.0" AnchorPane.leftAnchor="0.0"
+          AnchorPane.rightAnchor="0.0" AnchorPane.bottomAnchor="0.0">
+        <!-- The CustomTitleBar is added dynamically in Controller.java -->
+
+        <!-- HTMLEditor -->
+        <HTMLEditor fx:id="htmlEditor" VBox.vgrow="ALWAYS"/>
+    </VBox>
+
+    <!-- The ModeInfoPopup will be added dynamically in Controller.java -->
+
+</AnchorPane>

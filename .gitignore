@@ -1,0 +1,20 @@
+# Ignore IDEA configuration files
+.idea/
+
+# Ignore Maven wrapper files
+.mvn/
+mvnw
+mvnw.cmd
+
+# Ignore target folder (build outputs)
+target/
+
+# Ignore everything under src/* except resources
+src/*
+!src/main/
+
+# Ignore log files
+*.log
+
+# Ignore temporary files
+*.tmp

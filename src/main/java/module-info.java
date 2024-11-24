@@ -2,11 +2,12 @@ module com.example.wikicraft {
     requires javafx.controls;
     requires javafx.fxml;
     requires javafx.web;
-    requires jdk.jsobject;
+    requires jdk.jsobject; // javascript
+    requires org.jsoup; // html indentations
 
     // not currently used:
 //    requires org.reactfx;
-//    requires org.fxmisc.flowless;
+//    requires flowless;
 //    requires org.fxmisc.richtext;
 //    requires org.controlsfx.controls;
 //    requires com.dlsc.formsfx;

@@ -34,6 +34,18 @@ public class Main extends Application {
             }
         });
 
+        stage.fullScreenProperty().addListener((obs, wasFullScreen, isFullScreen) -> {
+            if (isFullScreen) {
+                // Ensure border is removed in full-screen mode
+                root.setStyle("-fx-border-width: 0px;");
+            } else {
+                // Restore border when exiting full-screen mode
+                if (stage.isFocused()) {
+                    root.setStyle("-fx-border-width: 1px; -fx-border-color: cyan;");
+                }
+            }
+        });
+
         stage.show();
     }
 

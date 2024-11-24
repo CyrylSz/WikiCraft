@@ -10,7 +10,7 @@ import javafx.scene.shape.Rectangle;
 import javafx.scene.text.Font;
 import javafx.util.Duration;
 
-public class ModeInfoPopup extends StackPane {
+public class Popup extends StackPane {
 
     private final Rectangle background;
     private final Label label;
@@ -19,17 +19,17 @@ public class ModeInfoPopup extends StackPane {
     private double width;
     private double height;
 
-    public ModeInfoPopup(double width, double height) {
+    public Popup(double width, double height) {
         this("Mode", width, height, Color.GRAY, 0.8, Font.font(18));
         this.width = width;
         this.height = height;
     }
 
-    public ModeInfoPopup() {
+    public Popup() {
         this("Mode", 200, 50, Color.GRAY, 0.8, Font.font(18));
     }
 
-    public ModeInfoPopup(String text, double width, double height, Color color, double opacity, Font font) {
+    public Popup(String text, double width, double height, Color color, double opacity, Font font) {
         this.width = width;
         this.height = height;
 

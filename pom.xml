@@ -139,6 +139,19 @@
             <groupId>org.fxmisc.flowless</groupId>
             <artifactId>flowless</artifactId>
             <version>${flowless.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.jsoup</groupId>
+                    <artifactId>jsoup</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <!-- Jsoup (html indentations) -->
+        <dependency>
+            <groupId>org.jsoup</groupId>
+            <artifactId>jsoup</artifactId>
+            <version>1.16.1</version>
         </dependency>
 
     </dependencies>

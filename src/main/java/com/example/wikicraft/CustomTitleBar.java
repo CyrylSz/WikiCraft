@@ -3,6 +3,7 @@ package com.example.wikicraft;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Rectangle2D;
+import javafx.scene.Cursor;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.input.MouseEvent;
@@ -20,15 +21,19 @@ public class CustomTitleBar extends HBox {
 
     private double prevX, prevY, prevWidth, prevHeight;
     private boolean isMaximized = false;
-    private boolean isFullScreen = false;
+    public boolean isFullScreen = false;
 
     // Scaling factor for customizing title bar size
-    private static double scaling = 1.25;
+    private static double scaling = 1.10;
 
     private String hoverHighlightColor = "rgba(36, 184, 191, 0.3)";
     private String clickHighlightColor = "rgba(36, 184, 191, 0.6)";
 
     private boolean isDragging = false;
+
+    private static final double RESIZE_MARGIN = 5;
+    private boolean isResizing = false;
+    private double startX, startY, startWidth, startHeight;
 
     public void setHoverHighlightColor(Color color) {
         if (color != null) {
@@ -316,5 +321,143 @@ public class CustomTitleBar extends HBox {
                 (int)(color.getGreen() * 255),
                 (int)(color.getBlue() * 255),
                 color.getOpacity());
+    }
+
+    public void addTransparentResizeRegions(Pane rootPane) {
+        Pane topResizePane = new Pane();
+        Pane bottomResizePane = new Pane();
+        Pane leftResizePane = new Pane();
+        Pane rightResizePane = new Pane();
+        Pane topLeftResizePane = new Pane();
+        Pane topRightResizePane = new Pane();
+        Pane bottomLeftResizePane = new Pane();
+        Pane bottomRightResizePane = new Pane();
+
+        topResizePane.setCursor(Cursor.N_RESIZE);
+        bottomResizePane.setCursor(Cursor.S_RESIZE);
+        leftResizePane.setCursor(Cursor.W_RESIZE);
+        rightResizePane.setCursor(Cursor.E_RESIZE);
+        topLeftResizePane.setCursor(Cursor.NW_RESIZE);
+        topRightResizePane.setCursor(Cursor.NE_RESIZE);
+        bottomLeftResizePane.setCursor(Cursor.SW_RESIZE);
+        bottomRightResizePane.setCursor(Cursor.SE_RESIZE);
+
+        AnchorPane.setTopAnchor(topResizePane, 0.0);
+        AnchorPane.setLeftAnchor(topResizePane, 0.0);
+        AnchorPane.setRightAnchor(topResizePane, 0.0);
+        topResizePane.setPrefHeight(RESIZE_MARGIN);
+
+        AnchorPane.setBottomAnchor(bottomResizePane, 0.0);
+        AnchorPane.setLeftAnchor(bottomResizePane, 0.0);
+        AnchorPane.setRightAnchor(bottomResizePane, 0.0);
+        bottomResizePane.setPrefHeight(RESIZE_MARGIN);
+
+        AnchorPane.setTopAnchor(leftResizePane, RESIZE_MARGIN);
+        AnchorPane.setBottomAnchor(leftResizePane, RESIZE_MARGIN);
+        AnchorPane.setLeftAnchor(leftResizePane, 0.0);
+        leftResizePane.setPrefWidth(RESIZE_MARGIN);
+
+        AnchorPane.setTopAnchor(rightResizePane, RESIZE_MARGIN);
+        AnchorPane.setBottomAnchor(rightResizePane, RESIZE_MARGIN);
+        AnchorPane.setRightAnchor(rightResizePane, 0.0);
+        rightResizePane.setPrefWidth(RESIZE_MARGIN);
+
+        AnchorPane.setTopAnchor(topLeftResizePane, 0.0);
+        AnchorPane.setLeftAnchor(topLeftResizePane, 0.0);
+        topLeftResizePane.setPrefWidth(RESIZE_MARGIN);
+        topLeftResizePane.setPrefHeight(RESIZE_MARGIN);
+
+        AnchorPane.setTopAnchor(topRightResizePane, 0.0);
+        AnchorPane.setRightAnchor(topRightResizePane, 0.0);
+        topRightResizePane.setPrefWidth(RESIZE_MARGIN);
+        topRightResizePane.setPrefHeight(RESIZE_MARGIN);
+
+        AnchorPane.setBottomAnchor(bottomLeftResizePane, 0.0);
+        AnchorPane.setLeftAnchor(bottomLeftResizePane, 0.0);
+        bottomLeftResizePane.setPrefWidth(RESIZE_MARGIN);
+        bottomLeftResizePane.setPrefHeight(RESIZE_MARGIN);
+
+        AnchorPane.setBottomAnchor(bottomRightResizePane, 0.0);
+        AnchorPane.setRightAnchor(bottomRightResizePane, 0.0);
+        bottomRightResizePane.setPrefWidth(RESIZE_MARGIN);
+        bottomRightResizePane.setPrefHeight(RESIZE_MARGIN);
+
+        addResizeControl(topResizePane, Cursor.N_RESIZE);
+        addResizeControl(bottomResizePane, Cursor.S_RESIZE);
+        addResizeControl(leftResizePane, Cursor.W_RESIZE);
+        addResizeControl(rightResizePane, Cursor.E_RESIZE);
+        addResizeControl(topLeftResizePane, Cursor.NW_RESIZE);
+        addResizeControl(topRightResizePane, Cursor.NE_RESIZE);
+        addResizeControl(bottomLeftResizePane, Cursor.SW_RESIZE);
+        addResizeControl(bottomRightResizePane, Cursor.SE_RESIZE);
+
+        rootPane.getChildren().addAll(
+                topResizePane, bottomResizePane, leftResizePane, rightResizePane,
+                topLeftResizePane, topRightResizePane, bottomLeftResizePane, bottomRightResizePane
+        );
+    }
+
+    private void addResizeControl(Pane pane, Cursor cursorType) {
+        pane.setOnMousePressed(event -> {
+            isResizing = true;
+            startX = event.getScreenX();
+            startY = event.getScreenY();
+            startWidth = stage.getWidth();
+            startHeight = stage.getHeight();
+            event.consume();
+        });
+        pane.setOnMouseDragged(event -> {
+            if (isResizing) {
+                resizeWindow(event, cursorType);
+                event.consume();
+            }
+        });
+        pane.setOnMouseReleased(event -> {
+            isResizing = false;
+            event.consume();
+        });
+    }
+
+    private void resizeWindow(MouseEvent event, Cursor cursorType) {
+        double deltaX = event.getScreenX() - startX;
+        double deltaY = event.getScreenY() - startY;
+
+        if (cursorType == Cursor.E_RESIZE) {
+            stage.setWidth(startWidth + deltaX);
+        } else if (cursorType == Cursor.W_RESIZE) {
+            stage.setX(startX + deltaX);
+            stage.setWidth(startWidth - deltaX);
+        } else if (cursorType == Cursor.N_RESIZE) {
+            stage.setY(startY + deltaY);
+            stage.setHeight(startHeight - deltaY);
+        } else if (cursorType == Cursor.S_RESIZE) {
+            stage.setHeight(startHeight + deltaY);
+        } else if (cursorType == Cursor.NE_RESIZE) {
+            stage.setWidth(startWidth + deltaX);
+            stage.setY(startY + deltaY);
+            stage.setHeight(startHeight - deltaY);
+        } else if (cursorType == Cursor.NW_RESIZE) {
+            stage.setX(startX + deltaX);
+            stage.setWidth(startWidth - deltaX);
+            stage.setY(startY + deltaY);
+            stage.setHeight(startHeight - deltaY);
+        } else if (cursorType == Cursor.SE_RESIZE) {
+            stage.setWidth(startWidth + deltaX);
+            stage.setHeight(startHeight + deltaY);
+        } else if (cursorType == Cursor.SW_RESIZE) {
+            stage.setX(startX + deltaX);
+            stage.setWidth(startWidth - deltaX);
+            stage.setHeight(startHeight + deltaY);
+        }
+
+        double minWidth = 450;
+        double minHeight = 200;
+
+        if (stage.getWidth() < minWidth) {
+            stage.setWidth(minWidth);
+        }
+        if (stage.getHeight() < minHeight) {
+            stage.setHeight(minHeight);
+        }
     }
 }

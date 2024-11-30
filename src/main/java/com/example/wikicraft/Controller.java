@@ -1,10 +1,16 @@
 package com.example.wikicraft;
 
+import com.jfoenix.controls.JFXToggleButton;
+import javafx.animation.Interpolator;
+import javafx.animation.ParallelTransition;
+import javafx.animation.RotateTransition;
+import javafx.animation.TranslateTransition;
 import javafx.application.Platform;
 import javafx.fxml.FXML;
+import javafx.geometry.Insets;
 import javafx.scene.Node;
 import javafx.scene.Scene;
-import javafx.scene.control.ToolBar;
+import javafx.scene.control.*;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.paint.Color;
@@ -12,14 +18,15 @@ import javafx.scene.web.HTMLEditor;
 import javafx.scene.web.WebEngine;
 import javafx.scene.web.WebView;
 import javafx.stage.Stage;
+import javafx.util.Duration;
 import netscape.javascript.JSException;
 import javafx.scene.layout.*;
-import javafx.scene.control.Button;
 import javafx.event.ActionEvent;
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.*;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -30,6 +37,9 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Document.OutputSettings;
 import org.jsoup.nodes.Entities;
+import javafx.scene.control.TreeView;
+import javafx.scene.control.TreeItem;
+import javafx.scene.control.TreeCell;
 
 public class Controller {
     @FXML
@@ -49,9 +59,6 @@ public class Controller {
 
     private CustomTitleBar titleBar;
     private Stage stage;
-
-    private Popup modeInfoPopup;
-    private Popup fileInfoPopup;
 
     private Path currentContentFile = Paths.get(
             System.getProperty("user.home"),
@@ -75,6 +82,12 @@ public class Controller {
 
     private Stack<String> navigationStack = new Stack<>();
 
+    private VBox settingsMenu;
+    private boolean isSettingsMenuVisible = false;
+
+    private VBox searchMenu;
+    private boolean isSearchMenuVisible = false;
+
     @FXML
     public void initialize() {
         Platform.runLater(() -> {
@@ -82,6 +95,21 @@ public class Controller {
 
             titleBar = new CustomTitleBar(stage);
             rootVBox.getChildren().add(0, titleBar);
+
+            titleBar.setSearchButtonHandler(event -> {
+                toggleSearchMenu();
+            });
+            initSearchMenu();
+
+            titleBar.setPencilButtonHandler(event -> {
+                toggleInsertViewMode();
+            });
+            titleBar.setPencilButtonIcon("\uD83D\uDC41"); // Eye icon for view mode
+
+            titleBar.setOptionsButtonHandler(event -> {
+                toggleSettingsMenu();
+            });
+            initSettingsMenu();
 
             Scene scene = stage.getScene();
             scene.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
@@ -92,29 +120,11 @@ public class Controller {
                 }
             });
 
-            AnchorPane.setTopAnchor(rootVBox, 0.0);
-            AnchorPane.setBottomAnchor(rootVBox, 0.0);
-            AnchorPane.setLeftAnchor(rootVBox, 0.0);
-            AnchorPane.setRightAnchor(rootVBox, 0.0);
-
             titleBar.addTransparentResizeRegions(rootPane);
 
             adjustHTMLEditorBehavior();
         });
         VBox.setVgrow(htmlEditor, Priority.ALWAYS);
-
-        modeInfoPopup = new Popup(200, 50);
-        modeInfoPopup.setPopupColor(Color.CHOCOLATE);
-        modeInfoPopup.setPopupOpacity(0.85);
-        modeInfoPopup.setTextFont(javafx.scene.text.Font.font("Monocraft", 20));
-
-        fileInfoPopup = new Popup(400, 50);
-        fileInfoPopup.setPopupColor(Color.CHOCOLATE);
-        fileInfoPopup.setPopupOpacity(0.85);
-        fileInfoPopup.setTextFont(javafx.scene.text.Font.font("Monocraft", 20));
-
-        rootPane.getChildren().add(modeInfoPopup);
-        rootPane.getChildren().add(fileInfoPopup);
 
         htmlEditor.sceneProperty().addListener((obs, oldScene, newScene) -> {
             if (newScene != null) {
@@ -123,12 +133,10 @@ public class Controller {
                         stage = (Stage) newWindow;
 
                         stage.heightProperty().addListener((obsHeight, oldHeight, newHeight) -> {
-                            adjustTooltipPos(modeInfoPopup);
-                            adjustTooltipPos(fileInfoPopup);
+                            if (titleBar != null) adjustLayout();
                         });
                         stage.widthProperty().addListener((obsWidth, oldWidth, newWidth) -> {
-                            adjustTooltipPos(modeInfoPopup);
-                            adjustTooltipPos(fileInfoPopup);
+                            if (titleBar != null) adjustLayout();
                         });
                     }
                 });
@@ -142,6 +150,278 @@ public class Controller {
                 enterViewMode();
             }
         });
+    }
+
+    private void initSearchMenu() {
+        searchMenu = new VBox();
+        searchMenu.setStyle("-fx-background-color: #2e2e2e;");
+        searchMenu.setPadding(new Insets(20));
+        searchMenu.setSpacing(10);
+
+        Label searchLabel = new Label("Search");
+        searchLabel.setStyle("-fx-text-fill: white; -fx-font-size: 20px; -fx-font-weight: bold;");
+
+        // Create TreeView for folder structure
+        Path rootPath = currentContentFile.getParent(); // "example-wiki" folder
+        TreeItem<Path> rootItem = new TreeItem<>(rootPath);
+        rootItem.setExpanded(true);
+
+        buildFileTree(rootItem, rootPath);
+
+        TreeView<Path> treeView = new TreeView<>(rootItem);
+        treeView.setShowRoot(false); // Hide the root item if desired
+        treeView.setStyle("-fx-background-color: #118191;");
+
+        // Customize the TreeView to display file names without extensions
+        treeView.setCellFactory(tv -> new TreeCell<Path>() {
+            @Override
+            protected void updateItem(Path item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    setGraphic(null);
+                    setStyle("-fx-background-color: #072226;");
+                } else {
+                    String displayName;
+                    if (Files.isDirectory(item)) {
+                        displayName = item.getFileName().toString();
+                        setStyle("-fx-text-fill: yellow; -fx-background-color: #072226; -fx-font-weight: bold;");
+                    } else {
+                        displayName = item.getFileName().toString().replaceFirst("\\.html$", "");
+                        setStyle("-fx-text-fill: white; -fx-background-color: #072226; -fx-font-weight: bold;");
+                    }
+                    setText(displayName);
+
+                    // Highlight the current file
+                    if (item.toAbsolutePath().normalize().equals(currentContentFile.toAbsolutePath().normalize())) {
+                        setStyle("-fx-text-fill: green; -fx-font-weight: bold; -fx-background-color: #072226;");
+                    }
+                }
+            }
+        });
+
+        // Handle tree item selection
+        treeView.getSelectionModel().selectedItemProperty().addListener((obs, oldSelection, newSelection) -> {
+            if (newSelection != null && newSelection.isLeaf()) {
+                Path selectedPath = newSelection.getValue();
+                if (selectedPath != null) {
+                    saveContent();
+
+                    // Update the navigation stack
+                    //navigationStack.push(currentContentFile.toString());
+
+                    loadContentFromFile(selectedPath);
+                    //enterViewMode();
+
+                    // Optionally hide the search menu after selection - settings
+                    if (isSearchMenuVisible) {
+                        toggleSearchMenu();
+                    }
+                }
+            }
+        });
+
+        expandAndSelectCurrentFile(treeView, rootItem);
+
+        searchMenu.getChildren().addAll(searchLabel, treeView);
+        searchMenu.setPrefWidth(300); // Adjust width as needed
+
+        // Initially hide the search menu to the left
+        searchMenu.setTranslateX(-searchMenu.getPrefWidth());
+
+        // Add searchMenu to rootPane
+        rootPane.getChildren().add(searchMenu);
+
+        // Anchor searchMenu to top, bottom, and left
+        AnchorPane.setTopAnchor(searchMenu, 0.0);
+        AnchorPane.setBottomAnchor(searchMenu, 0.0);
+        AnchorPane.setLeftAnchor(searchMenu, 0.0);
+    }
+
+    private void expandAndSelectCurrentFile(TreeView<Path> treeView, TreeItem<Path> rootItem) {
+        TreeItem<Path> currentItem = findTreeItem(rootItem, currentContentFile);
+        if (currentItem != null) {
+            // Expand parent items
+            TreeItem<Path> parent = currentItem.getParent();
+            while (parent != null) {
+                parent.setExpanded(true);
+                parent = parent.getParent();
+            }
+
+            // Select the current item
+            treeView.getSelectionModel().select(currentItem);
+
+            // Scroll to the selected item
+            int index = treeView.getRow(currentItem);
+            treeView.scrollTo(index);
+        }
+    }
+
+    private TreeItem<Path> findTreeItem(TreeItem<Path> rootItem, Path targetPath) {
+        if (rootItem.getValue().toAbsolutePath().normalize().equals(targetPath.toAbsolutePath().normalize())) {
+            return rootItem;
+        }
+        for (TreeItem<Path> child : rootItem.getChildren()) {
+            TreeItem<Path> result = findTreeItem(child, targetPath);
+            if (result != null) {
+                return result;
+            }
+        }
+        return null;
+    }
+
+    private void buildFileTree(TreeItem<Path> parentItem, Path directory) {
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(directory)) {
+            for (Path entry : stream) {
+                if (Files.isDirectory(entry)) {
+                    TreeItem<Path> dirItem = new TreeItem<>(entry);
+                    parentItem.getChildren().add(dirItem);
+                    buildFileTree(dirItem, entry);
+                } else if (entry.getFileName().toString().endsWith(".html")) {
+                    TreeItem<Path> fileItem = new TreeItem<>(entry);
+                    parentItem.getChildren().add(fileItem);
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void toggleSearchMenu() {
+        if (isSearchMenuVisible) {
+            // Hide search menu
+            TranslateTransition hideMenu = new TranslateTransition(Duration.millis(300), searchMenu);
+            hideMenu.setToX(-searchMenu.getPrefWidth());
+            hideMenu.setInterpolator(Interpolator.EASE_IN);
+
+            // Rotate searchButton icon
+            RotateTransition rotateOut = new RotateTransition(Duration.millis(300), titleBar.getSearchButton());
+            rotateOut.setByAngle(-180);
+
+            ParallelTransition parallelTransition = new ParallelTransition(hideMenu, rotateOut);
+            parallelTransition.setOnFinished(event -> {
+                isSearchMenuVisible = false;
+                titleBar.setSearchButtonIcon("\uD83D\uDD0D"); // Search icon
+                titleBar.getSearchButton().setRotate(0);
+            });
+            parallelTransition.play();
+        } else {
+            // Show search menu
+            TranslateTransition showMenu = new TranslateTransition(Duration.millis(300), searchMenu);
+            showMenu.setToX(0);
+            showMenu.setInterpolator(Interpolator.EASE_OUT);
+
+            // Rotate searchButton icon
+            RotateTransition rotateIn = new RotateTransition(Duration.millis(300), titleBar.getSearchButton());
+            rotateIn.setByAngle(180);
+
+            ParallelTransition parallelTransition = new ParallelTransition(showMenu, rotateIn);
+            parallelTransition.setOnFinished(event -> {
+                isSearchMenuVisible = true;
+                titleBar.setSearchButtonIcon("→"); // Left arrow icon
+            });
+            parallelTransition.play();
+        }
+    }
+
+    private void toggleInsertViewMode() {
+        if (isInsertMode) {
+            enterViewMode();
+        } else {
+            enterInsertMode();
+        }
+
+        // Animate icon change
+        RotateTransition rotate = new RotateTransition(Duration.millis(300), titleBar.getPencilButton());
+        rotate.setByAngle(180);
+
+        rotate.setOnFinished(event -> {
+            if (isInsertMode) {
+                titleBar.setPencilButtonIcon("\uD83D\uDD89"); // Pencil icon
+            } else {
+                titleBar.setPencilButtonIcon("\uD83D\uDC41"); // Eye icon
+            }
+            titleBar.getPencilButton().setRotate(0);
+        });
+
+        rotate.play();
+
+        isInsertMode = !isInsertMode;
+    }
+
+    private void initSettingsMenu() {
+        settingsMenu = new VBox();
+        settingsMenu.setStyle("-fx-background-color: #2e2e2e;");
+        settingsMenu.setPadding(new Insets(20));
+        settingsMenu.setSpacing(20);
+
+        Label settingsLabel = new Label("Settings");
+        settingsLabel.setStyle("-fx-text-fill: white; -fx-font-size: 20px; -fx-font-weight: bold;");
+
+        // Create toggles
+        JFXToggleButton toggle1 = new JFXToggleButton();
+        toggle1.setText("Toggle 1");
+        toggle1.setStyle("-fx-text-fill: white;");
+
+        JFXToggleButton toggle2 = new JFXToggleButton();
+        toggle2.setText("Toggle 2");
+        toggle2.setStyle("-fx-text-fill: white;");
+
+        JFXToggleButton toggle3 = new JFXToggleButton();
+        toggle3.setText("Toggle 3");
+        toggle3.setStyle("-fx-text-fill: white;");
+
+        settingsMenu.getChildren().addAll(settingsLabel, toggle1, toggle2, toggle3);
+
+        settingsMenu.setPrefWidth(300); // Adjust as needed
+
+        // Initially hide the settings menu to the right
+        settingsMenu.setTranslateX(settingsMenu.getPrefWidth());
+
+        // Add settingsMenu to rootPane
+        rootPane.getChildren().add(settingsMenu);
+
+        // Anchor settingsMenu to top, bottom, and right
+        AnchorPane.setTopAnchor(settingsMenu, 0.0);
+        AnchorPane.setBottomAnchor(settingsMenu, 0.0);
+        AnchorPane.setRightAnchor(settingsMenu, 0.0);
+    }
+
+    private void toggleSettingsMenu() {
+        if (isSettingsMenuVisible) {
+            // Hide settings menu
+            TranslateTransition hideMenu = new TranslateTransition(Duration.millis(300), settingsMenu);
+            hideMenu.setToX(settingsMenu.getPrefWidth());
+            hideMenu.setInterpolator(Interpolator.EASE_IN);
+
+            // Rotate optionsButton icon
+            RotateTransition rotateOut = new RotateTransition(Duration.millis(300), titleBar.getOptionsButton());
+            rotateOut.setByAngle(-180);
+
+            ParallelTransition parallelTransition = new ParallelTransition(hideMenu, rotateOut);
+            parallelTransition.setOnFinished(event -> {
+                isSettingsMenuVisible = false;
+                titleBar.setOptionsButtonIcon("\u2699"); // Gear icon
+                titleBar.getOptionsButton().setRotate(0);
+            });
+            parallelTransition.play();
+        } else {
+            // Show settings menu
+            TranslateTransition showMenu = new TranslateTransition(Duration.millis(300), settingsMenu);
+            showMenu.setToX(0);
+            showMenu.setInterpolator(Interpolator.EASE_OUT);
+
+            // Rotate optionsButton icon
+            RotateTransition rotateIn = new RotateTransition(Duration.millis(300), titleBar.getOptionsButton());
+            rotateIn.setByAngle(180);
+
+            ParallelTransition parallelTransition = new ParallelTransition(showMenu, rotateIn);
+            parallelTransition.setOnFinished(event -> {
+                isSettingsMenuVisible = true;
+                titleBar.setOptionsButtonIcon("←"); // Arrow icon
+            });
+            parallelTransition.play();
+        }
     }
 
     private void adjustHTMLEditorBehavior() {
@@ -245,7 +525,6 @@ public class Controller {
 
         if (Files.exists(targetFile)) {
             loadContentFromFile(targetFile);
-            fileInfoPopup.show("Loaded " + targetFile.getFileName().toString());
         } else {
             try {
                 if (isDoubleBrackets) {
@@ -254,10 +533,8 @@ public class Controller {
                 Files.createFile(targetFile);
                 Files.write(targetFile, "Welcome to WikiCraft!".getBytes());
                 loadContentFromFile(targetFile);
-                fileInfoPopup.show("Created and loaded " + targetFile.getFileName().toString());
             } catch (IOException e) {
                 e.printStackTrace();
-                fileInfoPopup.show("Failed to create " + targetFile.getFileName().toString());
             }
         }
     }
@@ -268,12 +545,7 @@ public class Controller {
         String previousFilePath = navigationStack.pop();
         Path previousFile = Paths.get(previousFilePath);
 
-        if (Files.exists(previousFile)) {
-            loadContentFromFile(previousFile);
-            fileInfoPopup.show("Returned to " + previousFile.getFileName().toString());
-        } else {
-            fileInfoPopup.show("File not found: " + previousFile.getFileName().toString());
-        }
+        if (Files.exists(previousFile)) loadContentFromFile(previousFile);
     }
 
     private boolean isPatternDoubleBrackets(String pattern) {
@@ -351,7 +623,6 @@ public class Controller {
             bottomToolBar.setVisible(false);
             bottomToolBar.setManaged(false);
         }
-        modeInfoPopup.show("View Mode");
 
         insertModeContent = htmlEditor.getHtmlText();
         detectPatterns();
@@ -360,6 +631,8 @@ public class Controller {
         htmlEditor.setHtmlText(viewModeContent);
 
         saveContent();
+
+        if (titleBar != null) titleBar.setPencilButtonIcon("\uD83D\uDC41");
     }
 
     private void enterInsertMode() {
@@ -374,9 +647,10 @@ public class Controller {
             bottomToolBar.setVisible(true);
             bottomToolBar.setManaged(true);
         }
-        modeInfoPopup.show("Insert Mode");
 
         htmlEditor.setHtmlText(insertModeContent);
+
+        if (titleBar != null) titleBar.setPencilButtonIcon("\uD83D\uDD89");
     }
 
     private void saveContent() {
@@ -392,12 +666,10 @@ public class Controller {
                 try (BufferedWriter writer = new BufferedWriter(new FileWriter(currentContentFile.toString()))) {
                     writer.write(formattedContent);
                     System.out.println("Content saved successfully to " + currentContentFile);
-                    fileInfoPopup.show("Content Saved");
                 }
             } catch (Exception e) {
                 e.printStackTrace();
                 System.err.println("Failed to format or save content to " + currentContentFile);
-                fileInfoPopup.show("Save Failed");
             }
         }
     }
@@ -427,6 +699,20 @@ public class Controller {
     private void loadContentFromFile(Path filePath) {
         currentContentFile = filePath;
         loadContent();
+        refreshTreeView();
+    }
+
+    private void refreshTreeView() {
+        if (searchMenu != null) {
+            for (Node node : searchMenu.getChildren()) {
+                if (node instanceof TreeView) {
+                    TreeView<Path> treeView = (TreeView<Path>) node;
+                    treeView.refresh();
+                    expandAndSelectCurrentFile(treeView, treeView.getRoot());
+                    break;
+                }
+            }
+        }
     }
 
     private void addCustomButtonToHTMLEditor(HTMLEditor htmlEditor) {
@@ -482,95 +768,37 @@ public class Controller {
     }
 
     private static String escapeJavaStyleString(String str, boolean escapeSingleQuote, boolean escapeForwardSlash) {
-        StringBuilder out = new StringBuilder("");
-        if (str == null) {
-            return null;
-        }
-        int sz;
-        sz = str.length();
-        for (int i = 0; i < sz; i++) {
-            char ch = str.charAt(i);
-
-            if (ch > 0xfff) {
-                out.append("\\u").append(hex(ch));
-            } else if (ch > 0xff) {
-                out.append("\\u0").append(hex(ch));
-            } else if (ch > 0x7f) {
-                out.append("\\u00").append(hex(ch));
-            } else if (ch < 32) {
-                switch (ch) {
-                    case '\b':
-                        out.append('\\');
-                        out.append('b');
-                        break;
-                    case '\n':
-                        out.append('\\');
-                        out.append('n');
-                        break;
-                    case '\t':
-                        out.append('\\');
-                        out.append('t');
-                        break;
-                    case '\f':
-                        out.append('\\');
-                        out.append('f');
-                        break;
-                    case '\r':
-                        out.append('\\');
-                        out.append('r');
-                        break;
-                    default:
-                        if (ch > 0xf) {
-                            out.append("\\u00").append(hex(ch));
-                        } else {
-                            out.append("\\u000").append(hex(ch));
-                        }
-                        break;
-                }
+        if (str == null) return null;
+        StringBuilder out = new StringBuilder(str.length());
+        for (char ch : str.toCharArray()) {
+            if (ch > 0xfff) out.append("\\u").append(hex(ch));
+            else if (ch > 0xff) out.append("\\u0").append(hex(ch));
+            else if (ch > 0x7f) out.append("\\u00").append(hex(ch));
+            else if (ch < 32) {
+                out.append(switch (ch) {
+                    case '\b' -> "\\b";
+                    case '\n' -> "\\n";
+                    case '\t' -> "\\t";
+                    case '\f' -> "\\f";
+                    case '\r' -> "\\r";
+                    default -> ch > 0xf ? "\\u00" + hex(ch) : "\\u000" + hex(ch);
+                });
             } else {
                 switch (ch) {
-                    case '\'':
-                        if (escapeSingleQuote) {
-                            out.append('\\');
-                        }
-                        out.append('\'');
-                        break;
-                    case '"':
-                        out.append('\\');
-                        out.append('"');
-                        break;
-                    case '\\':
-                        out.append('\\');
-                        out.append('\\');
-                        break;
-                    case '/':
-                        if (escapeForwardSlash) {
-                            out.append('\\');
-                        }
-                        out.append('/');
-                        break;
-                    default:
-                        out.append(ch);
-                        break;
+                    case '\'': if (escapeSingleQuote) out.append('\\'); out.append('\''); break;
+                    case '"': out.append("\\\""); break;
+                    case '\\': out.append("\\\\"); break;
+                    case '/': if (escapeForwardSlash) out.append('\\'); out.append('/'); break;
+                    default: out.append(ch); break;
                 }
             }
         }
         return out.toString();
     }
 
+
     private static String hex(int i) {
         return Integer.toHexString(i);
-    }
-
-    private void adjustTooltipPos(Popup popup) {
-        if (stage != null) {
-            double windowWidth = stage.getWidth();
-            double popupWidth = popup.getPopupWidth();
-            double verticalOffset = 20;
-
-            AnchorPane.setBottomAnchor(popup, verticalOffset);
-            AnchorPane.setLeftAnchor(popup, (windowWidth - popupWidth) / 2);
-        }
     }
 
     private void runOnUiThread(Runnable runnable) {

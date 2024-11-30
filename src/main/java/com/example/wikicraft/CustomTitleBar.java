@@ -1,6 +1,8 @@
 package com.example.wikicraft;
 
 import javafx.application.Platform;
+import javafx.event.ActionEvent;
+import javafx.event.EventHandler;
 import javafx.geometry.Insets;
 import javafx.geometry.Rectangle2D;
 import javafx.scene.Cursor;
@@ -13,6 +15,7 @@ import javafx.scene.image.ImageView;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
 import javafx.scene.paint.Color;
+import com.jfoenix.controls.JFXButton;
 
 public class CustomTitleBar extends HBox {
     private double xOffset = 0;
@@ -22,6 +25,7 @@ public class CustomTitleBar extends HBox {
     private double prevX, prevY, prevWidth, prevHeight;
     private boolean isMaximized = false;
     public boolean isFullScreen = false;
+    private boolean isSnapped = false;
 
     // Scaling factor for customizing title bar size
     private static double scaling = 1.10;
@@ -34,6 +38,11 @@ public class CustomTitleBar extends HBox {
     private static final double RESIZE_MARGIN = 5;
     private boolean isResizing = false;
     private double startX, startY, startWidth, startHeight;
+
+    private JFXButton optionsButton;
+    private JFXButton pencilButton;
+    private JFXButton searchButton;
+
 
     public void setHoverHighlightColor(Color color) {
         if (color != null) {
@@ -86,11 +95,11 @@ public class CustomTitleBar extends HBox {
         leftBox.setSpacing(5 * scaling);
 
         // Center: 3 custom buttons
-        Button pencilButton = new Button("\uD83D\uDD89");
-        Button optionsButton = new Button("\u2699");
-        Button searchButton = new Button("\uD83D\uDD0D");
+        searchButton = createButton("\uD83D\uDD0D");
+        pencilButton = createButton("\uD83D\uDD89");
+        optionsButton = createButton("\u2699");
 
-        for (Button btn : new Button[]{pencilButton, optionsButton, searchButton}) {
+        for (JFXButton btn : new JFXButton[]{searchButton, pencilButton, optionsButton}) {
             btn.getStyleClass().add("title-bar-button");
             btn.setStyle("-fx-font-size: " + (12 * scaling) + "px;");
             btn.setOnAction(e -> {
@@ -98,13 +107,13 @@ public class CustomTitleBar extends HBox {
             });
         }
 
-        HBox centerBox = new HBox(pencilButton, optionsButton, searchButton);
+        HBox centerBox = new HBox(searchButton, pencilButton, optionsButton);
         centerBox.setSpacing(10 * scaling);
 
         // Right side: Minimize, Maximize, Close buttons
-        Button minimizeButton = new Button("\u2015");
-        Button maximizeButton = new Button("\u2610");
-        Button closeButton = new Button("\u2716");
+        JFXButton minimizeButton = createButton("\u2015");
+        JFXButton maximizeButton = createButton("\u2610");
+        JFXButton closeButton = createButton("\u2716", true);
 
         for (Button btn : new Button[]{minimizeButton, maximizeButton, closeButton}) {
             btn.getStyleClass().add("title-bar-button");
@@ -144,12 +153,72 @@ public class CustomTitleBar extends HBox {
         updateStyles();
     }
 
+    public JFXButton getPencilButton() {
+        return pencilButton;
+    }
+
+    public void setPencilButtonIcon(String iconText) {
+        if (pencilButton != null) {
+            pencilButton.setText(iconText);
+        }
+    }
+
+    public void setPencilButtonHandler(EventHandler<ActionEvent> handler) {
+        if (pencilButton != null) {
+            pencilButton.setOnAction(handler);
+        }
+    }
+
+    public JFXButton getSearchButton() {
+        return searchButton;
+    }
+
+    public void setSearchButtonIcon(String iconText) {
+        if (searchButton != null) {
+            searchButton.setText(iconText);
+        }
+    }
+
+    public void setSearchButtonHandler(EventHandler<ActionEvent> handler) {
+        if (searchButton != null) {
+            searchButton.setOnAction(handler);
+        }
+    }
+
+    public JFXButton getOptionsButton() {
+        return optionsButton;
+    }
+
+    public void setOptionsButtonIcon(String iconText) {
+        if (optionsButton != null) {
+            optionsButton.setText(iconText);
+        }
+    }
+
+    public void setOptionsButtonHandler(EventHandler<ActionEvent> handler) {
+        if (optionsButton != null) {
+            optionsButton.setOnAction(handler);
+        }
+    }
+
+
     private void enableWindowDragging() {
         this.setOnMousePressed(event -> {
             if (stage != null) {
+                if (isSnapped) {
+                    // Restore previous size and position
+                    stage.setWidth(prevWidth);
+                    stage.setHeight(prevHeight);
+                    isSnapped = false;
+
+                    double mouseX = event.getScreenX();
+                    stage.setX(mouseX - prevWidth / 2);
+                    stage.setY(event.getScreenY() - yOffset);
+                }
+                xOffset = event.getScreenX() - stage.getX();
+                yOffset = event.getScreenY() - stage.getY();
                 isDragging = true;
-                xOffset = event.getSceneX();
-                yOffset = event.getSceneY();
+                this.setCursor(Cursor.MOVE);
                 event.consume();
             }
         });
@@ -158,14 +227,15 @@ public class CustomTitleBar extends HBox {
             if (stage != null && isDragging) {
                 stage.setX(event.getScreenX() - xOffset);
                 stage.setY(event.getScreenY() - yOffset);
-
-                checkForSnapping(event);
+                this.setCursor(Cursor.MOVE);
                 event.consume();
             }
         });
 
         this.setOnMouseReleased(event -> {
             isDragging = false;
+            checkForSnapping(event);
+            this.setCursor(Cursor.DEFAULT);
             event.consume();
         });
     }
@@ -177,94 +247,120 @@ public class CustomTitleBar extends HBox {
         double mouseX = event.getScreenX();
         double mouseY = event.getScreenY();
 
-        int edgeThreshold = 1;
+        int edgeThreshold = 50;
 
-        // Maximize when dragged to the top edge
-        if (mouseY <= bounds.getMinY() + edgeThreshold) {
-            if (!isMaximized) {
-                toggleMaximize();
-            }
-        }
-        // Minimize when dragged to the bottom edge
-        else if (mouseY >= bounds.getMaxY() - edgeThreshold) {
-            stage.setIconified(true);
-        }
-        // Snap to left half
-        else if (mouseX <= bounds.getMinX() + edgeThreshold) {
-            stage.setX(bounds.getMinX());
-            stage.setY(bounds.getMinY());
-            stage.setWidth(bounds.getWidth() / 2);
-            stage.setHeight(bounds.getHeight());
-            isMaximized = false;
-        }
-        // Snap to right half
-        else if (mouseX >= bounds.getMaxX() - edgeThreshold) {
-            stage.setX(bounds.getMinX() + bounds.getWidth() / 2);
-            stage.setY(bounds.getMinY());
-            stage.setWidth(bounds.getWidth() / 2);
-            stage.setHeight(bounds.getHeight());
-            isMaximized = false;
-        }
         // Snap to top-left quarter
-        else if (mouseX <= bounds.getMinX() + edgeThreshold && mouseY <= bounds.getMinY() + edgeThreshold) {
+        if (mouseX <= bounds.getMinX() + edgeThreshold && mouseY <= bounds.getMinY() + edgeThreshold) {
+            if (!isSnapped) {
+                savePreviousSize();
+            }
             stage.setX(bounds.getMinX());
             stage.setY(bounds.getMinY());
             stage.setWidth(bounds.getWidth() / 2);
             stage.setHeight(bounds.getHeight() / 2);
             isMaximized = false;
+            isSnapped = true;
         }
         // Snap to bottom-left quarter
         else if (mouseX <= bounds.getMinX() + edgeThreshold && mouseY >= bounds.getMaxY() - edgeThreshold) {
+            if (!isSnapped) {
+                savePreviousSize();
+            }
             stage.setX(bounds.getMinX());
             stage.setY(bounds.getMinY() + bounds.getHeight() / 2);
             stage.setWidth(bounds.getWidth() / 2);
             stage.setHeight(bounds.getHeight() / 2);
             isMaximized = false;
+            isSnapped = true;
         }
         // Snap to top-right quarter
         else if (mouseX >= bounds.getMaxX() - edgeThreshold && mouseY <= bounds.getMinY() + edgeThreshold) {
+            if (!isSnapped) {
+                savePreviousSize();
+            }
             stage.setX(bounds.getMinX() + bounds.getWidth() / 2);
             stage.setY(bounds.getMinY());
             stage.setWidth(bounds.getWidth() / 2);
             stage.setHeight(bounds.getHeight() / 2);
             isMaximized = false;
+            isSnapped = true;
         }
         // Snap to bottom-right quarter
         else if (mouseX >= bounds.getMaxX() - edgeThreshold && mouseY >= bounds.getMaxY() - edgeThreshold) {
+            if (!isSnapped) {
+                savePreviousSize();
+            }
             stage.setX(bounds.getMinX() + bounds.getWidth() / 2);
             stage.setY(bounds.getMinY() + bounds.getHeight() / 2);
             stage.setWidth(bounds.getWidth() / 2);
             stage.setHeight(bounds.getHeight() / 2);
             isMaximized = false;
+            isSnapped = true;
         }
+        // Maximize when dragged to the top edge
+        else if (mouseY <= bounds.getMinY() + edgeThreshold) {
+            if (!isSnapped) {
+                savePreviousSize();
+            }
+            stage.setX(bounds.getMinX());
+            stage.setY(bounds.getMinY());
+            stage.setWidth(bounds.getWidth());
+            stage.setHeight(bounds.getHeight());
+            isMaximized = false;
+            isSnapped = true;
+        }
+        // Snap to left half
+        else if (mouseX <= bounds.getMinX() + edgeThreshold) {
+            if (!isSnapped) {
+                savePreviousSize();
+            }
+            stage.setX(bounds.getMinX());
+            stage.setY(bounds.getMinY());
+            stage.setWidth(bounds.getWidth() / 2);
+            stage.setHeight(bounds.getHeight());
+            isMaximized = false;
+            isSnapped = true;
+        }
+        // Snap to right half
+        else if (mouseX >= bounds.getMaxX() - edgeThreshold) {
+            if (!isSnapped) {
+                savePreviousSize();
+            }
+            stage.setX(bounds.getMinX() + bounds.getWidth() / 2);
+            stage.setY(bounds.getMinY());
+            stage.setWidth(bounds.getWidth() / 2);
+            stage.setHeight(bounds.getHeight());
+            isMaximized = false;
+            isSnapped = true;
+        }
+        // Close when dragged to the bottom edge
+        else if (mouseY >= bounds.getMaxY() - edgeThreshold) {
+            if (stage != null) {
+                stage.close();
+            }
+            Platform.exit();
+        }
+    }
+
+    private void savePreviousSize() {
+        prevX = stage.getX();
+        prevY = stage.getY();
+        prevWidth = stage.getWidth();
+        prevHeight = stage.getHeight();
     }
 
     private void toggleMaximize() {
         if (stage != null) {
             if (!isMaximized) {
-                // Store current window position and size
-                prevX = stage.getX();
-                prevY = stage.getY();
-                prevWidth = stage.getWidth();
-                prevHeight = stage.getHeight();
-
-                // Maximize the window
-                Screen screen = Screen.getPrimary();
-                Rectangle2D bounds = screen.getVisualBounds();
-
-                stage.setX(bounds.getMinX());
-                stage.setY(bounds.getMinY());
-                stage.setWidth(bounds.getWidth());
-                stage.setHeight(bounds.getHeight());
-
+                savePreviousSize();
+                stage.setMaximized(true);
                 isMaximized = true;
             } else {
-                // Restore window size and position
-                stage.setX(prevX);
-                stage.setY(prevY);
+                stage.setMaximized(false);
                 stage.setWidth(prevWidth);
                 stage.setHeight(prevHeight);
-
+                stage.setX(prevX);
+                stage.setY(prevY);
                 isMaximized = false;
             }
         }
@@ -422,42 +518,94 @@ public class CustomTitleBar extends HBox {
         double deltaX = event.getScreenX() - startX;
         double deltaY = event.getScreenY() - startY;
 
+        double newWidth = stage.getWidth();
+        double newHeight = stage.getHeight();
+        double newX = stage.getX();
+        double newY = stage.getY();
+
+        double minWidth = 450;  // Minimum width of the window
+        double minHeight = 200; // Minimum height of the window
+
         if (cursorType == Cursor.E_RESIZE) {
-            stage.setWidth(startWidth + deltaX);
+            newWidth = Math.max(minWidth, startWidth + deltaX);
         } else if (cursorType == Cursor.W_RESIZE) {
-            stage.setX(startX + deltaX);
-            stage.setWidth(startWidth - deltaX);
+            if (startWidth - deltaX >= minWidth) {
+                newWidth = startWidth - deltaX;
+                newX = startX + deltaX; // Adjust position only if size is above minimum
+            } else {
+                newWidth = minWidth;
+            }
         } else if (cursorType == Cursor.N_RESIZE) {
-            stage.setY(startY + deltaY);
-            stage.setHeight(startHeight - deltaY);
+            if (startHeight - deltaY >= minHeight) {
+                newHeight = startHeight - deltaY;
+                newY = startY + deltaY; // Adjust position only if size is above minimum
+            } else {
+                newHeight = minHeight;
+            }
         } else if (cursorType == Cursor.S_RESIZE) {
-            stage.setHeight(startHeight + deltaY);
+            newHeight = Math.max(minHeight, startHeight + deltaY);
         } else if (cursorType == Cursor.NE_RESIZE) {
-            stage.setWidth(startWidth + deltaX);
-            stage.setY(startY + deltaY);
-            stage.setHeight(startHeight - deltaY);
+            newWidth = Math.max(minWidth, startWidth + deltaX);
+            if (startHeight - deltaY >= minHeight) {
+                newHeight = startHeight - deltaY;
+                newY = startY + deltaY;
+            } else {
+                newHeight = minHeight;
+            }
         } else if (cursorType == Cursor.NW_RESIZE) {
-            stage.setX(startX + deltaX);
-            stage.setWidth(startWidth - deltaX);
-            stage.setY(startY + deltaY);
-            stage.setHeight(startHeight - deltaY);
+            if (startWidth - deltaX >= minWidth) {
+                newWidth = startWidth - deltaX;
+                newX = startX + deltaX;
+            } else {
+                newWidth = minWidth;
+            }
+            if (startHeight - deltaY >= minHeight) {
+                newHeight = startHeight - deltaY;
+                newY = startY + deltaY;
+            } else {
+                newHeight = minHeight;
+            }
         } else if (cursorType == Cursor.SE_RESIZE) {
-            stage.setWidth(startWidth + deltaX);
-            stage.setHeight(startHeight + deltaY);
+            newWidth = Math.max(minWidth, startWidth + deltaX);
+            newHeight = Math.max(minHeight, startHeight + deltaY);
         } else if (cursorType == Cursor.SW_RESIZE) {
-            stage.setX(startX + deltaX);
-            stage.setWidth(startWidth - deltaX);
-            stage.setHeight(startHeight + deltaY);
+            if (startWidth - deltaX >= minWidth) {
+                newWidth = startWidth - deltaX;
+                newX = startX + deltaX;
+            } else {
+                newWidth = minWidth;
+            }
+            newHeight = Math.max(minHeight, startHeight + deltaY);
         }
 
-        double minWidth = 450;
-        double minHeight = 200;
+        // Apply the new size and position
+        stage.setWidth(newWidth);
+        stage.setHeight(newHeight);
+        stage.setX(newX);
+        stage.setY(newY);
+    }
 
-        if (stage.getWidth() < minWidth) {
-            stage.setWidth(minWidth);
+
+    private JFXButton createButton(String text, boolean isCloseButton) {
+        JFXButton button = new JFXButton(text);
+        button.setStyle("-fx-background-color: transparent; -fx-text-fill: white; -fx-font-size: 14px;");
+
+        if (isCloseButton) {
+            // Add hover and click effects for the close button
+            button.setOnMouseEntered(e -> button.setStyle("-fx-background-color: rgba(255, 0, 0, 0.5); -fx-text-fill: white; -fx-font-size: 14px;"));
+            button.setOnMousePressed(e -> button.setStyle("-fx-background-color: rgba(255, 0, 0, 0.8); -fx-text-fill: white; -fx-font-size: 14px;"));
+            button.setOnMouseExited(e -> button.setStyle("-fx-background-color: transparent; -fx-text-fill: white; -fx-font-size: 14px;"));
+        } else {
+            // Add hover effect for standard buttons
+            button.setOnMouseEntered(e -> button.setStyle("-fx-background-color: rgba(255, 255, 255, 0.1); -fx-text-fill: white; -fx-font-size: 14px;"));
+            button.setOnMouseExited(e -> button.setStyle("-fx-background-color: transparent; -fx-text-fill: white; -fx-font-size: 14px;"));
         }
-        if (stage.getHeight() < minHeight) {
-            stage.setHeight(minHeight);
-        }
+
+        button.setCursor(Cursor.HAND);
+        return button;
+    }
+
+    private JFXButton createButton(String text) {
+        return createButton(text, false);
     }
 }

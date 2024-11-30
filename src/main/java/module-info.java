@@ -4,6 +4,7 @@ module com.example.wikicraft {
     requires javafx.web;
     requires jdk.jsobject; // javascript
     requires org.jsoup; // html indentations
+    requires com.jfoenix; // fancy looking stuff
 
     // not currently used:
 //    requires org.reactfx;

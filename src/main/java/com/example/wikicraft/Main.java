@@ -19,7 +19,7 @@ public class Main extends Application {
         stage.focusedProperty().addListener((observable, oldValue, newValue) -> {
             if (newValue) {
                 // Add border and expand window
-                root.setStyle("-fx-border-width: 1px; -fx-border-color: cyan;");
+                root.setStyle("-fx-border-width: 1px; -fx-border-color: #38798a;");
                 stage.setWidth(stage.getWidth() + 2);
                 stage.setHeight(stage.getHeight() + 2);
                 stage.setX(stage.getX() - 1);
